@@ -24,7 +24,7 @@ Securtiy Group: "0.0.0.0/0-----> Port 22"
 ssh -i .....pem ec2-user@
 
 
-## Part 3 - Installing and Configuring Nginx Web Server to Run `Hello World` Page
+## Part 2 - Installing and Configuring Nginx Web Server to Run `Hello World` Page
 
 # STEP_1_ Default Nginx Web Server
 
@@ -107,7 +107,7 @@ sudo systemctl restart nginx
 
 17. Check if the Web Server is working properly from the browser.
 
-## Part 4 - Automation of Web Server Installation through Bash Script
+## Part 3 - Automation of Web Server Installation through Bash Script
 
 18. Configure an Amazon EC2 instance with AMI as `Amazon Linux 2`, instance type as `t2.micro`, default VPC security group which allows connections from anywhere and any port.
 

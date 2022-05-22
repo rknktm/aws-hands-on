@@ -1,0 +1,265 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: This template creates vpc with public and private subnets
+
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "VPC CIDR Configuration"
+        Parameters: 
+          - myVpcCIDR
+      - 
+        Label: 
+          default: "Subnet CIDR Configuration"
+        Parameters: 
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+      - 
+        Label: 
+          default: "SSH CIDR Configuration"
+        Parameters: 
+          - SSHLocation
+Parameters:
+  myVpcCIDR:
+    Default: 10.11.0.0/16 
+    Description: please enter Ip range (CIDR notation) for your VPC 
+    Type: String
+
+  PublicSubnet1CIDR:
+    Default: 10.11.10.0/24
+    Description: please enter Ip range (CIDR notation) for your public subnet 1 
+    Type: String
+
+  PublicSubnet2CIDR:
+    Default: 10.11.20.0/24
+    Description: please enter Ip range (CIDR notation) for your public subnet 2 
+    Type: String
+     
+  PrivateSubnet1CIDR:
+    Default: 10.11.11.0/24
+    Description: please enter Ip range (CIDR notation) for your private subnet 1
+    Type: String
+
+  PrivateSubnet2CIDR:
+    Default: 10.11.21.0/24
+    Description: please enter Ip range (CIDR notation) for your private subnet 2
+    Type: String
+
+  SSHLocation:
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    Default: 0.0.0.0/0
+    Description: The IP address range that can be used to access the web server using SSH.
+    MaxLength: '18'
+    MinLength: '9'
+    Type: String
+    
+Resources:
+
+#MyVpc
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref myVpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: myVpc
+
+#Internet Gateway and attach to myVpc
+  myInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: myIG
+  myAttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref myVPC
+      InternetGatewayId: !Ref myInternetGateway
+
+# Public Subnets
+  myPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: PublicSubnet1  
+  myPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: PublicSubnet2
+
+# Route Table and Association of Subnets
+  myPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  !Ref myVPC
+      Tags:
+      - Key: Name
+        Value: myPublicRouteTable
+  myPublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref myPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref myInternetGateway
+  myPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPublicSubnet1
+      RouteTableId: !Ref myPublicRouteTable
+  myPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPublicSubnet2
+      RouteTableId: !Ref myPublicRouteTable
+
+#Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http/https to client host
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ALB Security Group
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow ssh to client host
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+      Tags:
+        - Key: Name
+          Value: SSh Security Group
+  WebserverSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http/https to client host
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref SSHSecurityGroup
+      Tags:
+        - Key: Name
+          Value: ALB Security Group
+  DataBaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow webserver to database
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebserverSecurityGroup
+      Tags:
+        - Key: Name
+          Value: Database Security Group
+
+  #Private Subnets
+  myPrivateSubnet1:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref myVPC
+        CidrBlock: !Ref PrivateSubnet1CIDR
+        AvailabilityZone: !Select [ 0, !GetAZs '' ]
+        Tags:
+        - Key: Name
+          Value: PrivateSubnet1 | Database Tier
+  myPrivateSubnet2:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref myVPC
+        CidrBlock: !Ref PrivateSubnet2CIDR
+        AvailabilityZone: !Select [ 1, !GetAZs '' ]
+        Tags:
+        - Key: Name
+          Value: PrivateSubnet2 | Database Tier
+
+Outputs: 
+  Vpc:
+      Value: !Ref myVPC
+      Description: Id of the VPC 
+      Export:
+        Name: !Sub ${AWS::StackName}-VPCID
+  PublicSubnet1:
+      Value: !Ref myPublicSubnet1
+      Description: Id of the PublicSubnet1
+      Export:
+        Name: !Sub ${AWS::StackName}-PublicSubnet1
+  PublicSubnet2:
+      Value: !Ref myPublicSubnet2
+      Description: Id of the PublicSubnet-2
+      Export:
+        Name: !Sub ${AWS::StackName}-PublicSubnet2
+  PrivateSubnet1:
+      Value: !Ref myPrivateSubnet1
+      Description: Id of the PrivateSubnet1
+      Export:
+        Name: !Sub ${AWS::StackName}-PrivateSubnet1
+  PrivateSubnet2:
+      Value: !Ref myPrivateSubnet2
+      Description: Id of the PrivateSubnet-2
+      Export:
+        Name: !Sub ${AWS::StackName}-PrivateSubnet2
+  DataBaseSecurityGroup:
+      Value: !Ref DataBaseSecurityGroup
+      Description: DataBaseSecurityGroup ID
+      Export:
+        Name: !Sub ${AWS::StackName}-DataBaseSecurityGroup
+  WebserverSecurityGroup:
+      Value: !Ref WebserverSecurityGroup
+      Description: WebserverSecurityGroup ID
+      Export:
+        Name: !Sub ${AWS::StackName}-WebserverSecurityGroup
+  SSHSecurityGroup:
+      Value: !Ref SSHSecurityGroup
+      Description: SSHSecurityGroup ID
+      Export:
+        Name: !Sub ${AWS::StackName}-SSHSecurityGroup
+  ALBSecurityGroup:
+      Value: !Ref ALBSecurityGroup
+      Description: ALBSecurityGroup ID
+      Export:
+        Name: !Sub ${AWS::StackName}-ALBSecurityGroup

@@ -1,0 +1,207 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: This template creates vpc with public and private subnets
+
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "VPC CIDR Configuration"
+        Parameters: 
+          - myVpcCIDR
+      - 
+        Label: 
+          default: "Subnet CIDR Configuration"
+        Parameters: 
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+      - 
+        Label: 
+          default: "SSH CIDR Configuration"
+        Parameters: 
+          - SSHLocation
+Parameters:
+  myVpcCIDR:
+    Default: 10.11.0.0/16 
+    Description: please enter Ip range (CIDR notation) for your VPC 
+    Type: String
+
+  PublicSubnet1CIDR:
+    Default: 10.11.10.0/24
+    Description: please enter Ip range (CIDR notation) for your public subnet 1 
+    Type: String
+
+  PublicSubnet2CIDR:
+    Default: 10.11.20.0/24
+    Description: please enter Ip range (CIDR notation) for your public subnet 2 
+    Type: String
+     
+  PrivateSubnet1CIDR:
+    Default: 10.11.11.0/24
+    Description: please enter Ip range (CIDR notation) for your private subnet 1
+    Type: String
+
+  PrivateSubnet2CIDR:
+    Default: 10.11.21.0/24
+    Description: please enter Ip range (CIDR notation) for your private subnet 2
+    Type: String
+
+  SSHLocation:
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    Default: 0.0.0.0/0
+    Description: The IP address range that can be used to access the web server using SSH.
+    MaxLength: '18'
+    MinLength: '9'
+    Type: String
+    
+Resources:
+
+#MyVpc
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref myVpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: myVpc
+
+#Internet Gateway and attach to myVpc
+  myInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: myIG
+
+  myAttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref myVPC
+      InternetGatewayId: !Ref myInternetGateway
+
+# Public Subnets
+  myPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: PublicSubnet1
+    
+  myPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: PublicSubnet2
+
+# Route Table and Association of Subnets
+  myPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  !Ref myVPC
+      Tags:
+      - Key: Name
+        Value: myPublicRouteTable
+
+  myPublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+        RouteTableId: !Ref myPublicRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId: !Ref myInternetGateway
+
+  myPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPublicSubnet1
+      RouteTableId: !Ref myPublicRouteTable
+
+  myPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPublicSubnet2
+      RouteTableId: !Ref myPublicRouteTable
+
+
+
+  # Private Subnets
+  myPrivateSubnet1:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref myVPC
+        CidrBlock: !Ref PrivateSubnet1CIDR
+        AvailabilityZone: !Select [ 0, !GetAZs '' ]
+        Tags:
+        - Key: Name
+          Value: PrivateSubnet1
+
+  myPrivateSubnet2:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref myVPC
+        CidrBlock: !Ref PrivateSubnet2CIDR
+        AvailabilityZone: !Select      #another writing option
+          - 1
+          - Fn::GetAZs: !Ref 'AWS::Region'
+        Tags:
+        - Key: Name
+          Value: PrivateSubnet2
+
+  #private route table and association of it.
+  myPrivateRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId:  !Ref myVPC
+        Tags:
+        - Key: Name
+          Value: myPrivateRouteTable
+
+  myPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+        RouteTableId: !Ref myPrivateRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId: !Ref NAT
+
+  myPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPrivateSubnet1
+      RouteTableId: !Ref myPrivateRouteTable
+
+  myPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPrivateSubnet2
+      RouteTableId: !Ref myPrivateRouteTable
+      
+
+#Elastic Ip and natgateway
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+        Domain: vpc
+
+  NAT:
+    Type: AWS::EC2::NatGateway
+    Properties:
+        AllocationId: !GetAtt EIP.AllocationId
+        ConnectivityType: public
+        SubnetId: !Ref myPublicSubnet1    
+        Tags:
+        - Key: Name
+          Value: Nat

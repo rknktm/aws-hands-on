@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Elastic Ip and NAT
+Parameters:
+  ExportStackName:
+    Description: please enter name of the Stack that exports needed values.
+    Type: String
+   
+Resources:
+#Elastic Ip and natgateway
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NAT:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIP.AllocationId
+      ConnectivityType: public
+      SubnetId: 
+        Fn::ImportValue: !Sub ${ExportStackName}-PublicSubnet1
+      Tags:
+      - Key: Name
+        Value: Nat
+
+#private route table and association of it.
+  myPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Fn::ImportValue: !Sub ${ExportStackName}-VPCID
+      Tags:
+      - Key: Name
+        Value: myPrivateRouteTable
+
+  myPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+        RouteTableId: !Ref myPrivateRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId: !Ref NAT
+
+  myPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: 
+        Fn::ImportValue: !Sub ${ExportStackName}-PrivateSubnet1
+      RouteTableId: !Ref myPrivateRouteTable
+
+  myPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: 
+        Fn::ImportValue: !Sub ${ExportStackName}-PrivateSubnet2
+      RouteTableId: !Ref myPrivateRouteTable
+      
+

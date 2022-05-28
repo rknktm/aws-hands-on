@@ -1,0 +1,287 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: This template creates Auto Scaling Group under Application Load Balacer in custom VPC
+
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "VPC CIDR Configuration"
+        Parameters: 
+          - myVpcCIDR
+      - 
+        Label: 
+          default: "Subnet CIDR Configuration"
+        Parameters: 
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PublicSubnet3CIDR
+      - 
+        Label: 
+          default: "Key Name"
+        Parameters: 
+          - KeyName
+
+Parameters:
+  myVpcCIDR:
+    Default: 10.11.0.0/16 
+    Description: please enter Ip range (CIDR notation) for your VPC 
+    Type: String
+
+  PublicSubnet1CIDR:
+    Default: 10.11.10.0/24
+    Description: please enter Ip range (CIDR notation) for your public subnet 1 
+    Type: String
+
+  PublicSubnet2CIDR:
+    Default: 10.11.20.0/24
+    Description: please enter Ip range (CIDR notation) for your public subnet 2 
+    Type: String    
+  PublicSubnet3CIDR:
+    Default: 10.11.30.0/24
+    Description: please enter Ip range (CIDR notation) for your public subnet 3 
+    Type: String
+  KeyName:
+    Default: key.pem
+    Description: please enter for your acces key 
+    Type: String
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x
+
+Resources:
+
+#MyVpc
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref myVpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: myVpc
+
+#Internet Gateway and attach to myVpc
+  myInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: myIG
+  myAttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref myVPC
+      InternetGatewayId: !Ref myInternetGateway
+
+# Public Subnets
+  myPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: PublicSubnet1  
+  myPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: PublicSubnet2
+  myPublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: !Ref PublicSubnet3CIDR
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: PublicSubnet3
+
+# Route Table and Association of Subnets
+  myPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  !Ref myVPC
+      Tags:
+      - Key: Name
+        Value: myPublicRouteTable
+  myPublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref myPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref myInternetGateway
+  myPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPublicSubnet1
+      RouteTableId: !Ref myPublicRouteTable
+  myPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPublicSubnet2
+      RouteTableId: !Ref myPublicRouteTable
+  myPublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref myPublicSubnet3
+      RouteTableId: !Ref myPublicRouteTable
+
+#Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http/https to client host
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+      Tags:
+        - Key: Name
+          Value: ALB Security Group
+
+# KeyPair
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties: 
+      KeyName: !Ref KeyName
+      Tags: 
+        - Key: Name
+          Value: KeyPair
+
+#Target Group
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: '80'
+      Protocol: 'HTTP'
+      VpcId: !Ref myVPC
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckPort: 80
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Tags:
+        - Key: Name
+          Value: My Target Group
+
+# APplication Load Balancer
+  MyApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      Subnets:
+        - !Ref myPublicSubnet1
+        - !Ref myPublicSubnet2
+        - !Ref myPublicSubnet3
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+      LoadBalancerArn: !Ref MyApplicationLoadBalancer
+      Port: '80'
+      Protocol: HTTP
+  MyLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-LTASG'
+      LaunchTemplateData:
+        ImageId: ami-0c1bc246476a5572b
+        InstanceType: t2.micro
+        KeyName: !Ref KeyName
+        SecurityGroupIds: 
+            - !Ref ALBSecurityGroup
+        UserData:
+          Fn::Base64:
+            !Sub |
+              #!/bin/bash
+              yum update -y
+              yum install httpd -y
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<center><h1> I am coming from $(hostname -f)</h1></center>" > /var/www/html/index.html
+#AutoScalingGroup
+  MyAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties: 
+      AvailabilityZones:
+        - !Select [ 0, !GetAZs '' ]
+        - !Select [ 1, !GetAZs '' ]
+        - !Select [ 2, !GetAZs '' ]
+      MinSize: '2'
+      MaxSize: '3'
+      DesiredCapacity: '2'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref MyLaunchTemplate
+        Version: !GetAtt MyLaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - !Ref myPublicSubnet1
+        - !Ref myPublicSubnet2
+        - !Ref myPublicSubnet3
+      TargetGroupARNs:
+       - !Ref MyTargetGroup
+      Tags:
+       - Key: Name
+         PropagateAtLaunch: false
+         Value: ASG
+  
+  WebServerTargetPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref MyAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 50.0
+Outputs: 
+  Vpc:
+      Value: !Ref myVPC
+      Description: Id of the VPC 
+      Export:
+        Name: !Sub ${AWS::StackName}-VPCID
+  PublicSubnet1:
+      Value: !Ref myPublicSubnet1
+      Description: Id of the PublicSubnet1
+      Export:
+        Name: !Sub ${AWS::StackName}-PublicSubnet1
+  PublicSubnet2:
+      Value: !Ref myPublicSubnet2
+      Description: Id of the PublicSubnet-2
+      Export:
+        Name: !Sub ${AWS::StackName}-PublicSubnet2
+  ALBSecurityGroup:
+      Value: !Ref ALBSecurityGroup
+      Description: ALBSecurityGroup ID
+      Export:
+        Name: !Sub ${AWS::StackName}-ALBSecurityGroup

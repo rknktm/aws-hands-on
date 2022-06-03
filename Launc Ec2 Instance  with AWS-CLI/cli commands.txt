@@ -1,0 +1,23 @@
+1- Launc Ec2
+
+aws ec2 run-instances \
+    --image-id ami-0022f774911c1d690 \
+    --instance-type t2.micro \
+    --count 1 \
+    --subnet-id subnet-0ff53c2ad0b513020 \
+    --key-name ... \
+    --security-group-ids sg-0a607d7d77217b067 \
+    --user-data file://my_script.txt
+
+2-Describe Instances to get Public Ip and InstanceID
+
+  aws ec2 describe-instances \
+  --query "Reservations[*].Instances[*].[InstanceId,PublicIpAddress]" \
+  --output=text
+
+
+3-Terminate instance
+
+  aws ec2 terminate-instances --instance-ids 
+
+

@@ -1,0 +1,26 @@
+<<<<<<< HEAD
+{
+    "Version": "2012-10-17", 
+    "Statement": [
+        {
+            "Sid": "PublicReadGetObject",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::don't forget to change me/*"
+        }
+    ]
+=======
+{
+    "Version": "2012-10-17", 
+    "Statement": [
+        {
+            "Sid": "PublicReadGetObject",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::don't forget to change me/*"
+        }
+    ]
+>>>>>>> cb4a7f7a502ec3753e30f9cd670450af31d1184b
+}

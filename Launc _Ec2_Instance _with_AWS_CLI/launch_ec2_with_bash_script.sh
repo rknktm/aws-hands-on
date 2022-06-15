@@ -15,4 +15,6 @@ aws ec2 run-instances \
 echo $(aws ec2 describe-instances \
   --query "Reservations[*].Instances[*].[InstanceId,PublicIpAddress]" \
   --output=text)
+sudo chmod 400 $key.pem
+ssh -i $key.pem ec2-user@$IP
 

@@ -192,7 +192,7 @@ Resources:
         - Key: Name
           Value: My Target Group
 
-# APplication Load Balancer
+# Application Load Balancer
   MyApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties: 
@@ -211,6 +211,8 @@ Resources:
       LoadBalancerArn: !Ref MyApplicationLoadBalancer
       Port: '80'
       Protocol: HTTP
+      
+#Launc Template
   MyLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
